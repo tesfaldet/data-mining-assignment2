@@ -1,5 +1,4 @@
 import tensorflow as tf
-import numpy as np
 
 
 """
@@ -63,10 +62,16 @@ MISC.
 """
 
 
-def predict(name, input_layer, axis=1):
-    with tf.get_default_graph().name_scope(name):
-        posterior = softmax(input_layer)
-        return tf.argmax(posterior, axis=axis)
+def argmax(input_layer, axis=1):
+    return tf.argmax(posterior, axis=axis)
+
+
+def max(input_layer, axis=1):
+    return tf.reduce_max(input_layer, axis=axis)
+
+
+def one_hot(name, input_layer, depth=2):
+    return tf.one_hot(input_layer, depth=depth)
 
 
 """
@@ -76,10 +81,10 @@ OBJECTIVE FUNCTIONS
 
 def cost(name, posterior, target, cost_matrix):
     """
-    Calculate cost using given cost matrix.
+    Calculate cost using given cost matrix:
 
     :param name:  Name of graph module.
-    :param posterior:  Tensor (Nx1) of softmax activations where N is
+    :param posterior:  Tensor (Nx2) of softmax activations where N is
                        batch size.
     :param target:  Tensor (Nx1) of target labels (0 or 1) where N is batch
                     size.
@@ -107,6 +112,11 @@ def cost(name, posterior, target, cost_matrix):
         false_negative = cost_matrix[1, 0]
         true_negative = cost_matrix[0, 0]
 
-        one_hot_target = tf.one_hot([])
+        pred_act = max(posterior)
 
-        cost = true_positive * tf.log(posterior) * target
+        cost = true_positive * target * pred_act + \
+            true_negative * (1 - target) * (1 - pred_act) + \
+            false_positive * (1 - target) * pred_act + \
+            false_negative * target * (1 - pred_act)
+
+        return cost
