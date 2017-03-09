@@ -1,4 +1,4 @@
-# import tensorflow as tf
+import tensorflow as tf
 import numpy as np
 from utilities import *
 
@@ -7,46 +7,52 @@ class DataSet(object):
 
     def __init__(self, train, test, folds=2):
         self._num_examples = train['data'].shape[0]
-        self._validation = validation
-        self._epochs_completed = 0
-        self._index_in_epoch = 0
 
         # split training data and labels into k folds
         self._folds = []
         num_per_fold = self._num_examples / folds
-        for i in range(folds - 1):
-            train_data_fold = self._train['data'] \
-                                         [i*num_per_fold:(i+1)*num_per_fold]
-            train_labels_fold = self._train['labels'] \
-                                           [i*num_per_fold:(i+1)*num_per_fold]
-            val_data_fold = self._train['data'] \
-                                       [i*num_per_fold:(i+1)*num_per_fold]
-            val_labels_fold = self._train['labels'] \
-                                         [i*num_per_fold:(i+1)*num_per_fold]
+        for i in range(folds):
+            start = i*num_per_fold
+            end = (i+1)*num_per_fold
+
+            # get validation fold
+            val_data_fold = \
+                self._train['data'][start:end]
+            val_labels_fold = \
+                self._train['labels'][start:end]
+
+            # gather the rest of the folds as training data and labels
+            train_data = \
+                np.concatenate((self._train['data'][:start],
+                               self._train['data'][end:]))
+            train_labels = \
+                np.concatenate((self._train['labels'][:start],
+                               self._train['labels'][end:]))
+
             self._folds.append({'train':
-                                {'data': train_data_fold,
-                                 'labels': train_labels_fold},
+                                {'data': train_data,
+                                 'labels': train_labels},
                                 'validation':
                                 {'data': val_data_fold,
                                  'labels': val_labels_fold}
                                 })
-        # take care of remaining data (deals with case where num examples is
-        # not divisible by folds)
-        train_data_fold = self._train['data'][(folds - 1)*num_per_fold:]
-        train_labels_fold = self._train['labels'][(folds - 1)*num_per_fold:]
-        self._folds.append({'data': train_data_fold,
-                            'labels': train_labels_fold})
 
-    def validation_data(self):
-        pass
+    def next_batch(self, batch_size, fold):
+        train_data = self._folds[fold]['train']['data']
+        train_labels = self._folds[fold]['train']['labels']
+        num_train = train_data.shape[0]
 
-    def next_batch(self, batch_size, fold=0):
-        pass
+        # sampling with replacement
+        indices = np.random.choice(num_train, batch_size)
+        X_batch = train_data[indices]
+        y_batch = train_labels[indices]
+
+        return X_batch, y_batch
 
 
 def load_dataset(train_filename, test_filename, folds=2):
     def load_data(filename, train=True):
-        def theta(x): return 2*np.pi*(x / 7.0)
+        def theta(x): return 2*np.pi*(x / 7.0)  # 7 is number of weekdays
         with open(filename) as f:
             data = [map(float, line.rstrip('\n')
                     .replace('check', '1,0,0,0')

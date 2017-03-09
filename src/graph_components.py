@@ -79,7 +79,7 @@ OBJECTIVE FUNCTIONS
 """
 
 
-def cost(name, posterior, target, cost_matrix):
+def cost(name, posterior, target, cost_matrix, train=True):
     """
     Calculate cost using given cost matrix:
 
@@ -112,7 +112,10 @@ def cost(name, posterior, target, cost_matrix):
         false_negative = cost_matrix[1, 0]
         true_negative = cost_matrix[0, 0]
 
-        pred_act = max(posterior)
+        if train:
+            pred_act = max(posterior)  # continuous between 0 and 1
+        else:
+            pred_act = argmax(posterior)  # discrete 0 or 1
 
         cost = true_positive * target * pred_act + \
             true_negative * (1 - target) * (1 - pred_act) + \
