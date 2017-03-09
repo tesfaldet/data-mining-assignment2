@@ -1,0 +1,17 @@
+@attribute NEUKUNDE {yes,no}
+@attribute SESSION_TIME numeric
+@attribute VALUE_ORDER_PRE numeric
+@attribute AMOUNT_ORDER_PRE numeric
+@attribute B_EMAIL {yes,no}
+@attribute VALUE_ORDER numeric
+@attribute CHK_LADR {yes,no}
+@attribute ANUMMER_01 numeric
+@attribute Z_METHODE {check,credit_card,debit_card,debit_note}
+@attribute B_TELEFON {yes,no}
+@attribute WEEKDAY_ORDER {Friday,Monday,Saturday,Sunday,Thursday,Tuesday,Wednesday}
+@attribute CHK_COOKIE {yes,no}
+@attribute FAIL_LORT {yes,no}
+@attribute CHK_IP {yes,no}
+@attribute CHK_RADR {yes,no}
+@attribute FAIL_RORT {yes,no}
+@attribute FLAG_NEWSLETTER {yes,no}

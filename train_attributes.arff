@@ -1,0 +1,24 @@
+@attribute NEUKUNDE {yes,no}  # convert to 0,1
+@attribute SESSION_TIME numeric  # normalize to 0,1 (find max, min in train)
+@attribute VALUE_ORDER_PRE numeric  # normalize to 0,1 (find max, min in train)
+@attribute AMOUNT_ORDER_PRE numeric  # normalize to 0,1 (find max, min in train)
+@attribute B_EMAIL {yes,no}  # convert to 0,1
+@attribute VALUE_ORDER numeric  # normalize to 0,1 (find max, min in train)
+@attribute CHK_LADR {yes,no}  # convert to 0,1
+@attribute ANUMMER_01 numeric  # normalize to 0,1 (find max, min in train)
+
+# convert to 4 columns, one of them with value 1 and the rest 0
+@attribute Z_METHODE {check,credit_card,debit_card,debit_note}
+
+@attribute B_TELEFON {yes,no}  # convert to 0,1
+
+# convert to 7 columns, one of them with value 1 and the rest 0
+@attribute WEEKDAY_ORDER {Friday,Monday,Saturday,Sunday,Thursday,Tuesday,Wednesday}
+
+@attribute CHK_COOKIE {yes,no}  # convert to 0,1
+@attribute FAIL_LORT {yes,no}  # convert to 0,1
+@attribute CHK_IP {yes,no}  # convert to 0,1
+@attribute CHK_RADR {yes,no}  # convert to 0,1
+@attribute FAIL_RORT {yes,no}  # convert to 0,1
+@attribute FLAG_NEWSLETTER {yes,no}  # convert to 0,1
+@attribute CLASS {yes,no}  # convert to 0,1
