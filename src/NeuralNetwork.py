@@ -69,24 +69,21 @@ class NeuralNetwork(object):
     def build_network(self, name, input_layer):
         with tf.get_default_graph().name_scope(name):
             # first hidden layer
-            fc1 = fc('fc1', input_layer, 16)
+            fc1 = fc('fc1', input_layer, 50)
 
             # first activation
-            h_fc1 = elu('elu1', fc1)
+            h_fc1 = elu('elu', fc1)
 
             # second hidden layer
-            fc2 = fc('fc2', h_fc1, 32)
+            fc2 = fc('fc2', h_fc1, 2)
 
-            # second activation
-            h_fc1 = elu('elu2', fc2)
+            # softmax posterior
+            h_fc2 = softmax('softmax', fc2)
 
             # output
-            output = fc('fc3', h_fc1, 2)
+            output = h_fc2
 
-            # activation output
-            h_output = softmax('softmax', output)
-
-            return h_output
+            return output
 
     def run_train(self):
         # for cleanliness
