@@ -1,4 +1,34 @@
 import tensorflow as tf
+from src.Dataset import load_dataset
+from src.QueueRunner import QueueRunner
+
+
+"""
+DATA HANDLING
+"""
+
+
+def data_layer(name, train_filename, test_filename, num_folds,
+               batch_size, num_processes):
+    with tf.get_default_graph().name_scope(name):
+        # load dataset
+        d = load_dataset(train_filename, test_filename, num_folds)
+
+        # get training and validation data for all folds
+        with tf.device('/cpu:0'):
+            input_shape = list(d._train['data'].shape[1:])
+            target_shape = list(d._train['labels'].shape[1:])
+            folds_data = []
+            for fold in range(num_folds):
+                queue_runner = QueueRunner(d, input_shape, target_shape,
+                                           batch_size, fold, num_processes)
+                X, y = queue_runner.get_inputs()
+                X_val = tf.pack(d._folds[fold]['validation']['data'])
+                y_val = tf.pack(d._folds[fold]['validation']['labels'])
+                folds_data.append([X, y, X_val, y_val, queue_runner])
+            test_data = tf.pack(d._test['data'])
+
+        return folds_data, test_data
 
 
 """

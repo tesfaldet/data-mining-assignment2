@@ -8,13 +8,13 @@ class QueueRunner(object):
     of data.
     """
     def __init__(self, dataset, input_shape, target_shape,
-                 batch_size, num_processes=1):
-        def flatten(list): return [item for sublist in l for item in sublist]
+                 batch_size, fold, num_processes=1):
         self.dataset = dataset
         self.batch_size = batch_size
         self.num_processes = num_processes
-        input_shape = flatten([None, flatten(input_shape)])
-        target_shape = flatten([None, flatten(target_shape)])
+        self.fold = fold
+        input_shape = [None] + input_shape
+        target_shape = [None] + target_shape
         self.dataX = tf.placeholder(dtype=tf.float32, shape=input_shape)
         self.dataY = tf.placeholder(dtype=tf.float32, shape=target_shape)
         # The actual queue of data.
@@ -55,5 +55,6 @@ class QueueRunner(object):
 
     def _data_iterator(self):
         while True:
-            x_batch, y_batch = self.dataset.next_batch(self.batch_size)
+            x_batch, y_batch = self.dataset.next_batch(self.batch_size,
+                                                       self.fold)
             yield x_batch, y_batch
