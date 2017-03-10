@@ -25,7 +25,11 @@ def data_layer(name, train_filename, test_filename, num_folds,
                 X, y = queue_runner.get_inputs()
                 X_val = tf.pack(d._folds[fold]['validation']['data'])
                 y_val = tf.pack(d._folds[fold]['validation']['labels'])
-                folds_data.append([X, y, X_val, y_val, queue_runner])
+                folds_data.append({'train':
+                                   {'data': X, 'labels': y},
+                                   'validation':
+                                   {'data': X_val, 'labels': y_val},
+                                   'queue_runner': queue_runner})
             test_data = tf.pack(d._test['data'])
 
         return folds_data, test_data
@@ -59,11 +63,12 @@ def fc(name, input_layer, num_hidden_units):
 
         bias_init = tf.constant_initializer(0.0)
 
+        # weight decay
         reg = tf.contrib.layers.l2_regularizer(0.5)
 
         return tf.contrib.layers \
                  .fully_connected(input_layer, num_hidden_units,
-                                  activation_fn=leaky_relu,
+                                  activation_fn=None,
                                   weights_initializer=weight_init,
                                   weights_regularizer=reg,
                                   biases_initializer=bias_init)
@@ -74,17 +79,20 @@ ACTIVATIONS
 """
 
 
-def leaky_relu(input_layer, alpha=0.01):
-    return tf.maximum(tf.multiply(input_layer, alpha), input_layer)
+def leaky_relu(name, input_layer, alpha=0.01):
+    with tf.get_default_graph().name_scope(name):
+        return tf.maximum(tf.multiply(input_layer, alpha), input_layer)
 
 
-def elu(input_layer, alpha=1.0):
-    return tf.where(tf.greater(input_layer, 0.0),
-                    input_layer, alpha * (tf.exp(input_layer) - 1.0))
+def elu(name, input_layer, alpha=1.0):
+    with tf.get_default_graph().name_scope(name):
+        return tf.where(tf.greater(input_layer, 0.0),
+                        input_layer, alpha * (tf.exp(input_layer) - 1.0))
 
 
-def softmax(input_layer, axis=-1):
-    return tf.nn.softmax(input_layer, dim=axis)
+def softmax(name, input_layer, axis=-1):
+    with tf.get_default_graph().name_scope(name):
+        return tf.nn.softmax(input_layer, dim=axis)
 
 
 """

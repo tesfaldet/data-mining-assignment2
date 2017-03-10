@@ -1,5 +1,6 @@
 import tensorflow as tf
 from src.graph_components import *
+from utilities import check_snapshots
 import time
 import datetime
 import numpy as np
@@ -17,16 +18,26 @@ class NeuralNetwork(object):
             # retrieve training and validation data from all folds and
             # retrieve the test data
             self.folds_data, self.test_data = \
-                data_layer('input',
+                data_layer('data_layer',
                            self.user_config['train_filename'],
                            self.user_config['test_filename'],
                            self.user_config['num_folds'],
                            self.user_config['batch_size'],
                            self.user_config['num_processes'])
 
+            # create input and target placeholders for feeding in training
+            # data, validation data, or test data
+            self.input_layer = tf.placeholder(dtype=tf.float32, name='input')
+            self.target = tf.placeholder(dtype=tf.float32, name='target')
+
             # build network
+            self.output = self.build_network('NeuralNetwork', self.input_layer)
 
             # attach losses
+            self.train_cost = cost('train_cost', self.output, self.target,
+                                   self.user_config['cost_matrix'], train=True)
+            self.val_cost = cost('validation_cost', self.output, self.target,
+                                 self.user_config['cost_matrix'], train=False)
 
             # attach summaries
             self.attach_summaries('summaries')
@@ -39,7 +50,8 @@ class NeuralNetwork(object):
 
             # visualize queue usage
             data_queue = self.queue_runner
-            data_queue_capacity = data_queue.batch_size * data_queue.n_threads
+            data_queue_capacity = data_queue.batch_size * \
+                data_queue.num_processes
             tf.summary.scalar('queue saturation',
                               data_queue.queue.size() / data_queue_capacity)
 
@@ -48,7 +60,18 @@ class NeuralNetwork(object):
 
     def build_network(self, name, input_layer):
         with tf.get_default_graph().name_scope(name):
-            # TODO: build network here
+            # first hidden layer
+            fc1 = fc('fc1', input_layer, 16)
+
+            # first activation
+            h_fc1 = elu('elu', fc1)
+
+            # second hidden layer
+            fc2 = fc('fc2', h_fc1, 32)
+
+            # activation output
+            output = softmax('softmax', fc2)
+
             return output
 
     def run_train(self):
@@ -58,6 +81,7 @@ class NeuralNetwork(object):
         snapshot_frequency = self.user_config['snapshot_frequency']
         print_frequency = self.user_config['print_frequency']
         validation_frequency = self.user_config['validation_frequency']
+        folds = self.folds_data
 
         with self.graph.as_default():
             with tf.device('/gpu:' + str(self.user_config['gpu'])):
@@ -73,15 +97,16 @@ class NeuralNetwork(object):
                 # check snapshots
                 resume, start_iteration = check_snapshots()
 
-                # start summary writers
-                summary_writer = tf.summary.FileWriter('logs/train',
-                                                       sess.graph)
-                summary_writer_val = tf.summary.FileWriter('logs/val')
+                # start summary writer
+                summary_writer = tf.summary.FileWriter('logs', sess.graph)
 
                 # start the tensorflow QueueRunners
                 tf.train.start_queue_runners(sess=sess)
 
                 # start the data queue runner's threads
+                # TODO: implement queue stop after fold is done
+                fold = 0
+                self.queue_runner = folds[fold]['queue_runner']
                 processes = self.queue_runner.start_processes(sess)
 
                 if resume:
@@ -89,11 +114,19 @@ class NeuralNetwork(object):
                 else:
                     sess.run(tf.global_variables_initializer())
 
+                # TODO: loop through all folds
                 last_print = time.time()
                 for i in range(start_iteration, iterations):
+                    # retrieve training data
+                    input_layer = sess.run(folds[fold]['train']['data'])
+                    target = sess.run(folds[fold]['train']['labels'])
+
                     # run a train step
-                    results = sess.run([train_step, self.loss,
-                                        self.summaries])
+                    results = sess.run([train_step, self.train_cost,
+                                        self.summaries],
+                                       feed_dict={self.input_layer:
+                                                  input_layer,
+                                                  self.target: target})
 
                     # print training information
                     if (i + 1) % print_frequency == 0:
@@ -101,7 +134,7 @@ class NeuralNetwork(object):
                         it_per_sec = print_frequency / time_diff
                         remaining_it = iterations - i
                         eta = remaining_it / it_per_sec
-                        print 'Iteration %d: loss: %f lr: %f ' \
+                        print 'Iteration %d: cost: %f lr: %f ' \
                               'iter per/s: %f ETA: %s' \
                               % (i + 1, results[1], base_lr, it_per_sec,
                                  str(datetime.timedelta(seconds=eta)))
@@ -113,13 +146,21 @@ class NeuralNetwork(object):
                     if (i + 1) % validation_frequency == 0:
                         print 'Validating...'
 
-                        # breaking up large validation data into chunks to
-                        # prevent out of memory issues
-                        avg_val_loss, val_summary = self.validate_chunks(sess)
+                        # retrieve validation data
+                        val_input_layer = \
+                            sess.run(folds[fold]['validation']['data'])
+                        val_target = \
+                            sess.run(folds[fold]['validation']['labels'])
 
-                        print 'Validation loss: %f' % (avg_val_loss)
-                        summary_writer_val.add_summary(val_summary, i + 1)
-                        summary_writer_val.flush()
+                        # evaluate validation cost
+                        results = sess.run([self.val_cost, self.summaries],
+                                           feed_dict={self.input_layer:
+                                                      val_input_layer,
+                                                      self.target: val_target})
+
+                        print 'Validation cost: %f' % (results[0])
+                        summary_writer.add_summary(results[1], i + 1)
+                        summary_writer.flush()
 
                     # save snapshot
                     if (i + 1) % snapshot_frequency == 0:
