@@ -5,15 +5,22 @@ from utilities import *
 
 class DataSet(object):
 
-    def __init__(self, train, test, folds=2):
-        self._num_examples = train['data'].shape[0]
+    def __init__(self, train, test, num_folds=2):
+        # initializing properties
+        self._train = train
+        self._test = test
+        self._num_folds = num_folds
+        self._num_per_fold = self._train['data'].shape[0] / self._num_folds
+        self._num_examples = self._num_per_fold * (self._num_folds - 1)
+        self._total_num_examples = self._num_per_fold + self._num_examples
+        self._epochs_completed = 0
+        self._index_in_epoch = 0
+        self._folds = []
 
         # split training data and labels into k folds
-        self._folds = []
-        num_per_fold = self._num_examples / folds
-        for i in range(folds):
-            start = i*num_per_fold
-            end = (i+1)*num_per_fold
+        for i in range(self._num_folds):
+            start = i*self._num_per_fold
+            end = (i+1)*self._num_per_fold
 
             # get validation fold
             val_data_fold = \
@@ -37,22 +44,33 @@ class DataSet(object):
                                  'labels': val_labels_fold}
                                 })
 
-    def next_batch(self, batch_size, fold):
+    def next_batch(self, batch_size, fold=0):
         train_data = self._folds[fold]['train']['data']
         train_labels = self._folds[fold]['train']['labels']
-        num_train = train_data.shape[0]
 
         # sampling with replacement
-        indices = np.random.choice(num_train, batch_size)
+        indices = np.random.choice(self._num_examples, batch_size)
         X_batch = train_data[indices]
         y_batch = train_labels[indices]
+
+        # update epoch count
+        assert batch_size <= self._num_examples
+        self._index_in_epoch += batch_size
+        if self._index_in_epoch > self._num_examples:
+            self._epochs_completed += 1
+            # start next epoch
+            self._index_in_epoch = self._index_in_epoch - self._num_examples
 
         return X_batch, y_batch
 
 
-def load_dataset(train_filename, test_filename, folds=2):
+def load_dataset(train_filename, test_filename, num_folds=2):
     def load_data(filename, train=True):
         def theta(x): return 2*np.pi*(x / 7.0)  # 7 is number of weekdays
+        if train:
+            print 'Loading training dataset...'
+        else:
+            print 'Loading test dataset..'
         with open(filename) as f:
             data = [map(float, line.rstrip('\n')
                     .replace('check', '1,0,0,0')
@@ -96,4 +114,4 @@ def load_dataset(train_filename, test_filename, folds=2):
     test_data = load_data(test_filename, train=False)
 
     return DataSet(train={'data': train_data, 'labels': train_labels},
-                   test={'data': test_data}, folds=folds)
+                   test={'data': test_data}, num_folds=num_folds)
