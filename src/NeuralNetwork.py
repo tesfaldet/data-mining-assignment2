@@ -1,9 +1,8 @@
 import tensorflow as tf
 from src.graph_components import *
-from utilities import check_snapshots
+from src.utilities import check_snapshots
 import time
 import datetime
-import numpy as np
 
 
 class NeuralNetwork(object):
