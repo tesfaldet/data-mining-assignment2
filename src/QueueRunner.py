@@ -1,5 +1,6 @@
 import tensorflow as tf
 from multiprocessing import Process
+import threading
 
 
 class QueueRunner(object):
@@ -47,7 +48,8 @@ class QueueRunner(object):
         """ Start background processes to feed queue """
         processes = []
         for n in range(self.num_processes):
-            p = Process(target=self.process, args=(sess,))
+            # TODO: fix Process not running
+            p = threading.Thread(target=self.process, args=(sess,))
             p.daemon = True
             p.start()
             processes.append(p)

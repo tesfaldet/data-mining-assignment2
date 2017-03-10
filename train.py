@@ -17,7 +17,9 @@ my_config['snapshot_frequency'] = 5000
 my_config['print_frequency'] = 10
 my_config['validation_frequency'] = 100
 my_config['num_processes'] = 6
+my_config['num_folds'] = 2
 my_config['gpu'] = 0
+my_config['cost_matrix'] = [[0.0, 5.0], [50.0, 0.0]]
 
 net = NeuralNetwork(config={'tf': config_proto,
                             'user': my_config})

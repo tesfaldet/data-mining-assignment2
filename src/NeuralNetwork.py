@@ -13,46 +13,55 @@ class NeuralNetwork(object):
         self.tf_config = config['tf']
 
         self.graph = tf.Graph()
-        with tf.device('/gpu:' + str(self.user_config['gpu'])):
-            # retrieve training and validation data from all folds and
-            # retrieve the test data
-            self.folds_data, self.test_data = \
-                data_layer('data_layer',
-                           self.user_config['train_filename'],
-                           self.user_config['test_filename'],
-                           self.user_config['num_folds'],
-                           self.user_config['batch_size'],
-                           self.user_config['num_processes'])
+        with self.graph.as_default():
+            with tf.device('/gpu:' + str(self.user_config['gpu'])):
+                # retrieve training and validation data from all folds and
+                # retrieve the test data
+                self.folds_data, self.test_data, input_shape, target_shape = \
+                    data_layer('data_layer',
+                               self.user_config['train_filename'],
+                               self.user_config['test_filename'],
+                               self.user_config['num_folds'],
+                               self.user_config['batch_size'],
+                               self.user_config['num_processes'])
 
-            # create input and target placeholders for feeding in training
-            # data, validation data, or test data
-            self.input_layer = tf.placeholder(dtype=tf.float32, name='input')
-            self.target = tf.placeholder(dtype=tf.float32, name='target')
+                # create input and target placeholders for feeding in training
+                # data, validation data, or test data
+                self.input_layer = tf.placeholder(dtype=tf.float32,
+                                                  shape=[None] + input_shape,
+                                                  name='input')
+                self.target = tf.placeholder(dtype=tf.float32,
+                                             shape=[None] + target_shape,
+                                             name='target')
 
-            # build network
-            self.output = self.build_network('NeuralNetwork', self.input_layer)
+                # build network
+                self.output = self.build_network('NeuralNetwork',
+                                                 self.input_layer)
 
-            # attach losses
-            self.train_cost = cost('train_cost', self.output, self.target,
-                                   self.user_config['cost_matrix'], train=True)
-            self.val_cost = cost('validation_cost', self.output, self.target,
-                                 self.user_config['cost_matrix'], train=False)
+                # attach losses
+                self.train_cost = cost('train_cost', self.output, self.target,
+                                       self.user_config['cost_matrix'],
+                                       train=True)
+                self.val_cost = cost('validation_cost', self.output,
+                                     self.target,
+                                     self.user_config['cost_matrix'],
+                                     train=False)
 
-            # attach summaries
-            self.attach_summaries('summaries')
+                # attach summaries
+                self.attach_summaries('summaries')
 
     def attach_summaries(self, name):
-        with tf.name_scope(name):
+        with tf.get_default_graph().name_scope(name):
             # graph costs
             tf.summary.scalar('training cost', self.train_cost)
             tf.summary.scalar('validation cost', self.val_cost)
 
-            # visualize queue usage
-            data_queue = self.queue_runner
-            data_queue_capacity = data_queue.batch_size * \
-                data_queue.num_processes
-            tf.summary.scalar('queue saturation',
-                              data_queue.queue.size() / data_queue_capacity)
+            # visualize queue usage TODO: fix
+            # data_queue = self.queue_runner
+            # data_queue_capacity = data_queue.batch_size * \
+            #     data_queue.num_processes
+            # tf.summary.scalar('queue saturation',
+            #                   data_queue.queue.size() / data_queue_capacity)
 
             # merge summaries
             self.summaries = tf.summary.merge_all()
@@ -63,15 +72,21 @@ class NeuralNetwork(object):
             fc1 = fc('fc1', input_layer, 16)
 
             # first activation
-            h_fc1 = elu('elu', fc1)
+            h_fc1 = elu('elu1', fc1)
 
             # second hidden layer
             fc2 = fc('fc2', h_fc1, 32)
 
-            # activation output
-            output = softmax('softmax', fc2)
+            # second activation
+            h_fc1 = elu('elu2', fc2)
 
-            return output
+            # output
+            output = fc('fc3', h_fc1, 2)
+
+            # activation output
+            h_output = softmax('softmax', output)
+
+            return h_output
 
     def run_train(self):
         # for cleanliness
@@ -135,7 +150,7 @@ class NeuralNetwork(object):
                         eta = remaining_it / it_per_sec
                         print 'Iteration %d: cost: %f lr: %f ' \
                               'iter per/s: %f ETA: %s' \
-                              % (i + 1, results[1], base_lr, it_per_sec,
+                              % (i + 1, results[1], lr, it_per_sec,
                                  str(datetime.timedelta(seconds=eta)))
                         summary_writer.add_summary(results[2], i + 1)
                         summary_writer.flush()

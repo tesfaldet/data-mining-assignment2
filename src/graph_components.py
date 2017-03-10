@@ -23,16 +23,16 @@ def data_layer(name, train_filename, test_filename, num_folds,
                 queue_runner = QueueRunner(d, input_shape, target_shape,
                                            batch_size, fold, num_processes)
                 X, y = queue_runner.get_inputs()
-                X_val = tf.pack(d._folds[fold]['validation']['data'])
-                y_val = tf.pack(d._folds[fold]['validation']['labels'])
+                X_val = tf.stack(d._folds[fold]['validation']['data'])
+                y_val = tf.stack(d._folds[fold]['validation']['labels'])
                 folds_data.append({'train':
                                    {'data': X, 'labels': y},
                                    'validation':
                                    {'data': X_val, 'labels': y_val},
                                    'queue_runner': queue_runner})
-            test_data = tf.pack(d._test['data'])
+            test_data = tf.stack(d._test['data'])
 
-        return folds_data, test_data
+        return folds_data, test_data, input_shape, target_shape
 
 
 """
@@ -101,11 +101,15 @@ MISC.
 
 
 def argmax(input_layer, axis=1):
-    return tf.argmax(posterior, axis=axis)
+    return tf.to_float(tf.argmax(input_layer, axis=axis))
 
 
 def max(input_layer, axis=1):
     return tf.reduce_max(input_layer, axis=axis)
+
+
+def mean(input_layer, axis=None):
+    return tf.reduce_mean(input_layer, axis=axis)
 
 
 def one_hot(name, input_layer, depth=2):
@@ -145,19 +149,23 @@ def cost(name, posterior, target, cost_matrix, train=True):
     :type cost_matrix:  Tensor
     """
     with tf.get_default_graph().name_scope(name):
-        true_positive = cost_matrix[1, 1]
-        false_positive = cost_matrix[0, 1]
-        false_negative = cost_matrix[1, 0]
-        true_negative = cost_matrix[0, 0]
+        true_positive = cost_matrix[1][1]
+        false_positive = cost_matrix[0][1]
+        false_negative = cost_matrix[1][0]
+        true_negative = cost_matrix[0][0]
 
         if train:
-            pred_act = max(posterior)  # continuous between 0 and 1
+            # continuous between 0 and 1
+            pred_act = tf.reshape(max(posterior), [-1, 1])
         else:
-            pred_act = argmax(posterior)  # discrete 0 or 1
+            # discrete 0 or 1
+            pred_act = tf.reshape(argmax(posterior), [-1, 1])
 
-        cost = true_positive * target * pred_act + \
+        costs = true_positive * target * pred_act + \
             true_negative * (1 - target) * (1 - pred_act) + \
             false_positive * (1 - target) * pred_act + \
             false_negative * target * (1 - pred_act)
 
-        return cost
+        avg_cost = mean(costs)
+
+        return avg_cost
