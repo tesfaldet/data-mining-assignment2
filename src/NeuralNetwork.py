@@ -3,6 +3,7 @@ from src.graph_components import *
 from src.utilities import check_snapshots
 import time
 import datetime
+from sklearn import metrics
 
 
 class NeuralNetwork(object):
@@ -38,14 +39,24 @@ class NeuralNetwork(object):
                 self.output = self.build_network('NeuralNetwork',
                                                  self.input_layer)
 
-                # attach losses
-                self.train_cost = cost('train_cost', self.output, self.target,
-                                       self.user_config['cost_matrix'],
-                                       train=True)
-                self.val_cost = cost('validation_cost', self.output,
-                                     self.target,
-                                     self.user_config['cost_matrix'],
-                                     train=False)
+                # make prediction
+                self.pred = predict('prediction', self.output)
+
+                # attach loss to be minimized
+                self.train_loss = cross_entropy_loss('train_loss',
+                                                     self.output,
+                                                     self.target)
+
+                # attach cost to be used for validation
+                self.val_cost = cost('validation_cost',
+                                     self.pred, self.target,
+                                     self.user_config['cost_matrix'])
+
+                # attach accuracy measurements
+                self.train_accuracy = accuracy('train_accuracy',
+                                               self.pred, self.target)
+                self.val_accuracy = accuracy('validation_accuracy',
+                                             self.pred, self.target)
 
                 # attach summaries
                 self.attach_summaries('summaries')
@@ -53,8 +64,10 @@ class NeuralNetwork(object):
     def attach_summaries(self, name):
         with tf.get_default_graph().name_scope(name):
             # graph costs
-            tf.summary.scalar('training cost', self.train_cost)
+            tf.summary.scalar('training loss', self.train_loss)
             tf.summary.scalar('validation cost', self.val_cost)
+            tf.summary.scalar('train accuracy', self.train_accuracy)
+            tf.summary.scalar('validation accuracy', self.val_accuracy)
 
             # visualize queue usage TODO: fix
             # data_queue = self.queue_runner
@@ -97,7 +110,7 @@ class NeuralNetwork(object):
         with self.graph.as_default():
             with tf.device('/gpu:' + str(self.user_config['gpu'])):
                 optimizer = tf.train.AdamOptimizer(learning_rate=lr)
-                train_step = optimizer.minimize(self.train_cost)
+                train_step = optimizer.minimize(self.train_loss)
 
             """
             Train over iterations, printing loss at each one
@@ -133,7 +146,9 @@ class NeuralNetwork(object):
                     target = sess.run(folds[fold]['train']['labels'])
 
                     # run a train step
-                    results = sess.run([train_step, self.train_cost,
+                    results = sess.run([train_step,
+                                        self.train_loss,
+                                        self.train_accuracy,
                                         self.summaries],
                                        feed_dict={self.input_layer:
                                                   input_layer,
@@ -145,18 +160,17 @@ class NeuralNetwork(object):
                         it_per_sec = print_frequency / time_diff
                         remaining_it = iterations - i
                         eta = remaining_it / it_per_sec
-                        print 'Iteration %d: cost: %f lr: %f ' \
+                        print 'Iteration %d: loss: %f acc: %f lr: %f ' \
                               'iter per/s: %f ETA: %s' \
-                              % (i + 1, results[1], lr, it_per_sec,
+                              % (i + 1, results[1], results[2], lr,
+                                 it_per_sec,
                                  str(datetime.timedelta(seconds=eta)))
-                        summary_writer.add_summary(results[2], i + 1)
+                        summary_writer.add_summary(results[3], i + 1)
                         summary_writer.flush()
                         last_print = time.time()
 
                     # print validation information
                     if (i + 1) % validation_frequency == 0:
-                        print 'Validating...'
-
                         # retrieve validation data
                         val_input_layer = \
                             sess.run(folds[fold]['validation']['data'])
@@ -164,13 +178,22 @@ class NeuralNetwork(object):
                             sess.run(folds[fold]['validation']['labels'])
 
                         # evaluate validation cost
-                        results = sess.run([self.val_cost, self.summaries],
+                        results = sess.run([self.pred,
+                                            self.val_cost,
+                                            self.val_accuracy,
+                                            self.summaries],
                                            feed_dict={self.input_layer:
                                                       val_input_layer,
                                                       self.target: val_target})
+                        print 'Validation cost: %f acc: %f' \
+                              % (results[1], results[2])
 
-                        print 'Validation cost: %f' % (results[0])
-                        summary_writer.add_summary(results[1], i + 1)
+                        # print sklearn classification report
+                        print 'Classification report: %s' \
+                            % (metrics.classification_report(val_target,
+                                                             results[0]))
+
+                        summary_writer.add_summary(results[3], i + 1)
                         summary_writer.flush()
 
                     # save snapshot

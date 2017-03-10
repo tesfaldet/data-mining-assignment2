@@ -112,8 +112,32 @@ def mean(input_layer, axis=None):
     return tf.reduce_mean(input_layer, axis=axis)
 
 
-def one_hot(name, input_layer, depth=2):
-    return tf.one_hot(input_layer, depth=depth)
+def equal(input_layer_A, input_layer_B):
+    return tf.equal(input_layer_A, input_layer_B)
+
+
+def sum(input_layer, axis=None):
+    return tf.reduce_sum(input_layer, axis=axis)
+
+
+def one_hot(input_layer, depth=2):
+    return tf.one_hot(tf.to_int32(input_layer), depth=depth)
+
+
+def accuracy(name, prediction, target):
+    with tf.get_default_graph().name_scope(name):
+        correct_predictions = equal(prediction, target)
+        accuracy = mean(tf.to_float(correct_predictions))
+        return accuracy
+
+
+def num_examples(input_layer):
+    return tf.to_float(tf.shape(input_layer)[0])
+
+
+def predict(name, input_layer):
+    with tf.get_default_graph().name_scope(name):
+        return argmax(input_layer)
 
 
 """
@@ -121,13 +145,36 @@ OBJECTIVE FUNCTIONS
 """
 
 
-def cost(name, posterior, target, cost_matrix, train=True):
+def cross_entropy_loss(name, posterior, target):
+    """
+    Compute the negative log probability (cross-entropy) between posterior and
+    target.
+
+    :param name:  Name of graph module.
+    :param posterior:  Tensor (Nx2) of softmax outputs where N is batch size
+    :param target:  Tensor (Nx1) of target labels (0 or 1) where N is batch
+                    size.
+
+    :type name:  String
+    :type posterior:  Tensor
+    :type target:  Tensor
+
+    :return:  Return Tensor scalar
+    """
+    with tf.get_default_graph().name_scope(name):
+        target_onehot = one_hot(target)  # convert to 2-dim distribution
+        cross_entropy = sum(-target_onehot * tf.log(posterior), axis=1)
+        loss = sum(cross_entropy)
+        return loss / num_examples(posterior)  # average loss over batch
+
+
+def cost(name, prediction, target, cost_matrix):
     """
     Calculate cost using given cost matrix:
 
     :param name:  Name of graph module.
-    :param posterior:  Tensor (Nx2) of softmax activations where N is
-                       batch size.
+    :param prediction:  Tensor (Nx1) of predictions where N is
+                        batch size.
     :param target:  Tensor (Nx1) of target labels (0 or 1) where N is batch
                     size.
     :param cost_matrix:  Tensor (2x2) in format:
@@ -154,18 +201,11 @@ def cost(name, posterior, target, cost_matrix, train=True):
         false_negative = cost_matrix[1][0]
         true_negative = cost_matrix[0][0]
 
-        if train:
-            # continuous between 0 and 1
-            pred_act = tf.reshape(max(posterior), [-1, 1])
-        else:
-            # discrete 0 or 1
-            pred_act = tf.reshape(argmax(posterior), [-1, 1])
+        costs = true_positive * target * prediction + \
+            true_negative * (1 - target) * (1 - prediction) + \
+            false_positive * (1 - target) * prediction + \
+            false_negative * target * (1 - prediction)
 
-        costs = true_positive * target * pred_act + \
-            true_negative * (1 - target) * (1 - pred_act) + \
-            false_positive * (1 - target) * pred_act + \
-            false_negative * target * (1 - pred_act)
+        total_cost = sum(costs)
 
-        avg_cost = mean(costs)
-
-        return avg_cost
+        return total_cost
