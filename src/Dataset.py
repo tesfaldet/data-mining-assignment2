@@ -105,6 +105,16 @@ def load_dataset(train_filename, test_filename, num_folds=2):
         data[:, 7] = normalize(data[:, 7])
 
         if train:
+            # balance dataset and shuffle
+            # data = np.concatenate([data,
+            #                        np.repeat(data[data[..., -1] == 1.0],
+            #                                  15, axis=0)])
+            # np.random.shuffle(data)
+
+            # subtract mean
+            mean = np.mean(data[:, :-1], axis=0).reshape([1, -1])
+            data[:, :-1] -= mean
+
             return data[:, :-1], data[:, -1].reshape((-1, 1))  # data and label
         else:
             return data  # just data

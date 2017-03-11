@@ -61,10 +61,10 @@ def fc(name, input_layer, num_hidden_units):
         weight_init = tf.contrib.layers \
                         .variance_scaling_initializer()
 
-        bias_init = tf.constant_initializer(0.0)
+        bias_init = tf.constant_initializer(0.2)
 
         # weight decay
-        reg = tf.contrib.layers.l2_regularizer(0.5)
+        reg = tf.contrib.layers.l2_regularizer(0.1)
 
         return tf.contrib.layers \
                  .fully_connected(input_layer, num_hidden_units,
@@ -125,9 +125,9 @@ def one_hot(input_layer, depth=2):
                       axis=1)
 
 
-def accuracy(name, prediction, target):
+def accuracy(name, predictions, targets):
     with tf.get_default_graph().name_scope(name):
-        correct_predictions = equal(prediction, target)
+        correct_predictions = equal(predictions, targets)
         accuracy = mean(tf.to_float(correct_predictions))
         return accuracy
 
@@ -138,7 +138,7 @@ def num_examples(input_layer):
 
 def predict(name, input_layer):
     with tf.get_default_graph().name_scope(name):
-        return argmax(input_layer)
+        return tf.reshape(argmax(input_layer), [-1, 1])
 
 
 """
@@ -146,39 +146,59 @@ OBJECTIVE FUNCTIONS
 """
 
 
-def cross_entropy_loss(name, posterior, target):
+def class_sensitive_loss(name, posteriors, targets, cost_matrix):
+    with tf.get_default_graph().name_scope(name):
+        false_positive = cost_matrix[0][1]
+        false_negative = cost_matrix[1][0]
+
+        cost_matrix_onehot = \
+            tf.concat([tf.to_float(tf.equal(targets, 1.0)) * false_negative,
+                       tf.to_float(tf.equal(targets, 0.0)) * false_positive],
+                      1)
+        loss = sum(posteriors * cost_matrix_onehot)
+
+        return loss
+
+
+def cross_entropy_loss(name, posteriors, targets):
     """
     Compute the negative log probability (cross-entropy) between posterior and
     target.
 
     :param name:  Name of graph module.
-    :param posterior:  Tensor (Nx2) of softmax outputs where N is batch size
-    :param target:  Tensor (Nx1) of target labels (0 or 1) where N is batch
-                    size.
+    :param posteriors:  Tensor (Nx2) of softmax outputs where N is batch size
+    :param targets:  Tensor (Nx1) of target labels (0 or 1) where N is batch
+                     size.
 
     :type name:  String
-    :type posterior:  Tensor
-    :type target:  Tensor
+    :type posteriors:  Tensor
+    :type targets:  Tensor
 
     :return:  Return Tensor scalar
     """
     with tf.get_default_graph().name_scope(name):
-        target_onehot = one_hot(target)  # convert to 2-dim distribution
-        cross_entropy = sum(-target_onehot * tf.log(posterior), axis=1)
+        target_onehots = one_hot(targets)  # convert to 2-dim distribution
+        logits = tf.log(posteriors)
 
-        loss = sum(cross_entropy)
-        return loss / num_examples(posterior)  # average loss over batch
+        # Ensures that the loss for examples whose ground truth class is `1` is
+        # 5x higher than the loss for all other examples.
+        weighting = tf.multiply(0.0, tf.to_float(tf.equal(targets, 1.0))) + 1.0
+        weighting = tf.squeeze(weighting, axis=1)
+        loss = tf.losses.softmax_cross_entropy(target_onehots, logits,
+                                               weights=weighting)
+
+        return loss
 
 
-def cost(name, prediction, target, cost_matrix, train=True):
+def cost(name, predictions, targets, cost_matrix):
     """
     Calculate cost using given cost matrix:
 
     :param name:  Name of graph module.
-    :param prediction:  Tensor (Nx1) of predictions where N is
-                        batch size.
-    :param target:  Tensor (Nx1) of target labels (0 or 1) where N is batch
-                    size.
+    :param predictions:  Tensor (Nx1) of predictions where N is
+                         batch size.
+    :param targets:  Tensor (Nx1) of target labels (0 or 1) where N is batch
+                     size.
     :param cost_matrix:  Tensor (2x2) in format:
 
                               P=0  P=1
@@ -193,8 +213,8 @@ def cost(name, prediction, target, cost_matrix, train=True):
     prediction.
 
     :type name:  String
-    :type predicted:  Tensor
-    :type target:  Tensor
+    :type predicteds:  Tensor
+    :type targets:  Tensor
     :type cost_matrix:  Tensor
     """
     with tf.get_default_graph().name_scope(name):
@@ -203,10 +223,10 @@ def cost(name, prediction, target, cost_matrix, train=True):
         false_negative = cost_matrix[1][0]
         true_negative = cost_matrix[0][0]
 
-        costs = true_positive * target * prediction + \
-            true_negative * (1 - target) * (1 - prediction) + \
-            false_positive * (1 - target) * prediction + \
-            false_negative * target * (1 - prediction)
+        costs = true_positive * targets * predictions + \
+            true_negative * (1 - targets) * (1 - predictions) + \
+            false_positive * (1 - targets) * predictions + \
+            false_negative * targets * (1 - predictions)
 
         total_cost = sum(costs)
 

@@ -43,9 +43,14 @@ class NeuralNetwork(object):
                 self.pred = predict('prediction', self.output)
 
                 # attach loss to be minimized
-                self.train_loss = cross_entropy_loss('train_loss',
-                                                     self.output,
-                                                     self.target)
+                # self.train_loss = cross_entropy_loss('train_loss',
+                #                                      self.output,
+                #                                      self.target)
+                self.train_loss = class_sensitive_loss('train_loss',
+                                                       self.output,
+                                                       self.target,
+                                                       self.user_config
+                                                       ['cost_matrix'])
 
                 # attach cost to be used for validation
                 self.val_cost = cost('validation_cost',
@@ -189,7 +194,10 @@ class NeuralNetwork(object):
                               % (results[1], results[2])
 
                         # print sklearn classification report
-                        print 'Classification report: %s' \
+                        print 'Confusion matrix:\n %s' \
+                            % (metrics.confusion_matrix(val_target,
+                                                        results[0]))
+                        print 'Classification report:\n %s' \
                             % (metrics.classification_report(val_target,
                                                              results[0]))
 
