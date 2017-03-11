@@ -121,7 +121,8 @@ def sum(input_layer, axis=None):
 
 
 def one_hot(input_layer, depth=2):
-    return tf.one_hot(tf.to_int32(input_layer), depth=depth)
+    return tf.squeeze(tf.one_hot(tf.to_int32(input_layer), depth=depth),
+                      axis=1)
 
 
 def accuracy(name, prediction, target):
@@ -164,11 +165,12 @@ def cross_entropy_loss(name, posterior, target):
     with tf.get_default_graph().name_scope(name):
         target_onehot = one_hot(target)  # convert to 2-dim distribution
         cross_entropy = sum(-target_onehot * tf.log(posterior), axis=1)
+
         loss = sum(cross_entropy)
         return loss / num_examples(posterior)  # average loss over batch
 
 
-def cost(name, prediction, target, cost_matrix):
+def cost(name, prediction, target, cost_matrix, train=True):
     """
     Calculate cost using given cost matrix:
 
